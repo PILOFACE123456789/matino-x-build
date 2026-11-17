@@ -654,25 +654,26 @@ struct MatinoAimView: View {
         }
 
         DispatchQueue.global(qos: .userInitiated).async {
-            // 1. Try restoring via DevicePatchService if receipt exists
-            var restored = false
-            if let receipts = try? PatchTransaction.allReceipts(backupRoot: (try? PatchProjectLibrary.backupRootURL()) ?? URL(fileURLWithPath: NSTemporaryDirectory())) {
-                for r in receipts {
-                    if let _ = try? DevicePatchService.restore(receipt: r, allowChangedTargets: true) {
-                        restored = true
-                    }
-                }
-            }
-
-            // 2. Clean temporary injected patch files in documents if any
             let fm = FileManager.default
             let contURL = URL(fileURLWithPath: containerPath)
-            let filesToRemove = [patch.filename ?? "", "\(patch.id).3105", "patch.3105"]
+
+            // 1. Clean injected files from Documents and Library
+            let filesToRemove = [patch.filename ?? "", "\(patch.id).3105", "patch.3105", "temp_patch.3105"]
             for f in filesToRemove where !f.isEmpty {
                 let p1 = contURL.appendingPathComponent("Documents").appendingPathComponent(f)
                 let p2 = contURL.appendingPathComponent("Library").appendingPathComponent(f)
+                let p3 = contURL.appendingPathComponent("tmp").appendingPathComponent(f)
                 try? fm.removeItem(at: p1)
                 try? fm.removeItem(at: p2)
+                try? fm.removeItem(at: p3)
+            }
+
+            // 2. Also clear caches to force clean game reload
+            let cacheDir = contURL.appendingPathComponent("Library/Caches")
+            if let cacheFiles = try? fm.contentsOfDirectory(atPath: cacheDir.path) {
+                for c in cacheFiles {
+                    try? fm.removeItem(at: cacheDir.appendingPathComponent(c))
+                }
             }
 
             DispatchQueue.main.async {
