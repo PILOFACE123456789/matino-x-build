@@ -228,6 +228,7 @@ struct RemotePatchItem: Identifiable, Codable {
     var filename: String?
     var isInjecting: Bool = false
     var isInjected: Bool = false
+    var isExtracting: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case id, name, game, category, status_text, filename
@@ -505,21 +506,41 @@ struct MatinoAimView: View {
             }
             Spacer()
 
-            Button(action: { injectPatch(patch) }) {
-                Text(patch.isInjected ? "ACTIVE" : (patch.isInjecting ? "..." : "INJECT"))
-                    .font(.system(size: 12, weight: .heavy))
-                    .foregroundColor(.white)
-                    .frame(width: 84, height: 36)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(patch.isInjected ? Color.green.opacity(0.3) : Color(white: 0.14))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(patch.isInjected ? Color.green : Color(white: 0.3), lineWidth: 1)
-                            )
-                    )
+            HStack(spacing: 8) {
+                // INJECT Button
+                Button(action: { injectPatch(patch) }) {
+                    Text(patch.isInjected ? "ACTIVE" : (patch.isInjecting ? "..." : "INJECT"))
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundColor(.white)
+                        .frame(width: 70, height: 34)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(patch.isInjected ? Color.green.opacity(0.3) : Color(white: 0.14))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(patch.isInjected ? Color.green : Color(white: 0.28), lineWidth: 1)
+                                )
+                        )
+                }
+                .disabled(patch.isInjecting || patch.isExtracting)
+
+                // EXTRACT Button (Removes / Restores original files)
+                Button(action: { extractPatch(patch) }) {
+                    Text(patch.isExtracting ? "..." : "EXTRACT")
+                        .font(.system(size: 11, weight: .heavy))
+                        .foregroundColor(Color(red: 1.0, green: 0.4, blue: 0.45))
+                        .frame(width: 74, height: 34)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(Color.red.opacity(0.12))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 8)
+                                        .stroke(Color.red.opacity(0.35), lineWidth: 1)
+                                )
+                        )
+                }
+                .disabled(patch.isInjecting || patch.isExtracting)
             }
-            .disabled(patch.isInjecting)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 14)
@@ -617,6 +638,49 @@ struct MatinoAimView: View {
             patches[idx].isInjected = true
             alertMessage = "\(patch.name) injected successfully!"
             showAlert = true
+        }
+    }
+
+    private func extractPatch(_ patch: RemotePatchItem) {
+        guard let idx = patches.firstIndex(where: { $0.id == patch.id }) else { return }
+        patches[idx].isExtracting = true
+
+        let bundleID = patch.game == "max" ? "com.dts.freefiremax" : "com.dts.freefireth"
+        guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
+            patches[idx].isExtracting = false
+            alertMessage = "Free Fire (\(patch.game.uppercased())) container not found!"
+            showAlert = true
+            return
+        }
+
+        DispatchQueue.global(qos: .userInitiated).async {
+            // 1. Try restoring via DevicePatchService if receipt exists
+            var restored = false
+            if let receipts = try? PatchTransaction.allReceipts(backupRoot: (try? PatchProjectLibrary.backupRootURL()) ?? URL(fileURLWithPath: NSTemporaryDirectory())) {
+                for r in receipts {
+                    if let _ = try? DevicePatchService.restore(receipt: r, allowChangedTargets: true) {
+                        restored = true
+                    }
+                }
+            }
+
+            // 2. Clean temporary injected patch files in documents if any
+            let fm = FileManager.default
+            let contURL = URL(fileURLWithPath: containerPath)
+            let filesToRemove = [patch.filename ?? "", "\(patch.id).3105", "patch.3105"]
+            for f in filesToRemove where !f.isEmpty {
+                let p1 = contURL.appendingPathComponent("Documents").appendingPathComponent(f)
+                let p2 = contURL.appendingPathComponent("Library").appendingPathComponent(f)
+                try? fm.removeItem(at: p1)
+                try? fm.removeItem(at: p2)
+            }
+
+            DispatchQueue.main.async {
+                self.patches[idx].isExtracting = false
+                self.patches[idx].isInjected = false
+                self.alertMessage = "\(patch.name) extracted & removed from Free Fire successfully!"
+                self.showAlert = true
+            }
         }
     }
 }
