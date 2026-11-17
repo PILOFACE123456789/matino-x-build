@@ -220,14 +220,18 @@ private extension AppSection {
 import SwiftUI
 
 struct RemotePatchItem: Identifiable, Codable {
-    let id: String
-    let name: String
-    let game: String
-    let category: String
-    let status_text: String
-    let filename: String
-    var isInjecting: Bool = false
-    var isInjected: Bool = false
+    var id: String
+    var name: String
+    var game: String
+    var category: String
+    var status_text: String
+    var filename: String?
+    var isInjecting: Bool? = false
+    var isInjected: Bool? = false
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, game, category, status_text, filename
+    }
 }
 
 struct MatinoAimView: View {
@@ -541,13 +545,17 @@ struct MatinoAimView: View {
 
     // MARK: - Network & Inject Logic
     private func fetchRemotePatches() {
-        guard let url = URL(string: "\(serverURL)/api/patches") else { return }
-        URLSession.shared.dataTask(with: url) { data, _, _ in
+        guard let url = URL(string: "\(serverURL)/api/patches?t=" + String(Int(Date().timeIntervalSince1970))) else { return }
+        var request = URLRequest(url: url)
+        request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
+        request.timeoutInterval = 6.0
+
+        URLSession.shared.dataTask(with: request) { data, _, _ in
             guard let data = data else { return }
-            struct Resp: Codable { let all_patches: [RemotePatchItem] }
-            if let decoded = try? JSONDecoder().decode(Resp.self, from: data) {
+            struct Resp: Codable { let all_patches: [RemotePatchItem]? }
+            if let decoded = try? JSONDecoder().decode(Resp.self, from: data), let items = decoded.all_patches {
                 DispatchQueue.main.async {
-                    self.patches = decoded.all_patches
+                    self.patches = items
                 }
             }
         }.resume()
