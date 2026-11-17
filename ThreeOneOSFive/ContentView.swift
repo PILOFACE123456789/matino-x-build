@@ -583,7 +583,7 @@ struct MatinoAimView: View {
                     self.patches[idx].isInjecting = false
                     if let temp = tempURL {
                         // Apply package
-                        _ = try? PatchPackageCodec.unarchive(from: temp, to: URL(fileURLWithPath: containerPath))
+                        if let data = try? Data(contentsOf: temp), let decoded = try? PatchPackageCodec.decode(data, password: nil) { _ = try? DevicePatchService.apply(project: decoded.project) }
                     }
                     self.patches[idx].isInjected = true
                     self.alertMessage = "\(patch.name) injected successfully into Free Fire!"
