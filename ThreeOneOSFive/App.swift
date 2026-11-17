@@ -9,7 +9,7 @@ struct ThreeOneOSFiveApp: App {
     @StateObject private var patchStore = PatchProjectStore()
     @StateObject private var repositoryStore = PackageRepositoryStore()
     @AppStorage(AppLanguage.storageKey) private var languageCode = AppLanguage.english.rawValue
-    @State private var showOnboarding = OnboardingStore.shouldShow()
+    @State private var showOnboarding = false
     @State private var showAttribution = false
     @State private var updateOffer: AppUpdateChecker.Offer?
     @Environment(\.scenePhase) private var scenePhase
@@ -64,9 +64,9 @@ struct ThreeOneOSFiveApp: App {
                     .zIndex(1)
                 }
             }
-            .displayIdentityAttribution(isPresented: $showAttribution, enabled: !showOnboarding)
+            .displayIdentityAttribution(isPresented: $showAttribution, enabled: false)
             .sheet(isPresented: $showAttribution) {
-                DisplayAttributionSheet()
+                EmptyView()
             }
             .alert(item: $updateOffer) { offer in
                 Alert(
