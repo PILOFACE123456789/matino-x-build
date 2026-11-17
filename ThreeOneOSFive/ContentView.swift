@@ -621,7 +621,7 @@ struct MatinoAimView: View {
         let bundleID = patch.game == "max" ? "com.dts.freefiremax" : "com.dts.freefireth"
         guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
             patches[idx].isInjecting = false
-            alertMessage = "Free Fire (\(patch.game.uppercased())) is not installed on this device!"
+            alertMessage = "Free Fire (\(patch.game.uppercased())) is not installed or container cannot be accessed!"
             showAlert = true
             return
         }
@@ -632,50 +632,62 @@ struct MatinoAimView: View {
             return
         }
 
-        URLSession.shared.downloadTask(with: url) { tempURL, _, error in
+        URLSession.shared.downloadTask(with: url) { tempURL, response, error in
             DispatchQueue.global(qos: .userInitiated).async {
                 var success = false
                 var statusInfo = ""
                 let fm = FileManager.default
                 let contURL = URL(fileURLWithPath: containerPath)
 
-                if let temp = tempURL, let data = try? Data(contentsOf: temp) {
-                    // Method 1: Decode as official .3105 patch project and apply
-                    if let decoded = try? PatchPackageCodec.decode(data, password: nil) {
-                        do {
-                            _ = try DevicePatchService.apply(project: decoded.project)
-                            success = true
-                            statusInfo = "Patch project applied!"
-                        } catch {
-                            // If DevicePatchService threw, continue to fallback extraction
+                if let err = error {
+                    statusInfo = "Network: \(err.localizedDescription)"
+                } else if let temp = tempURL, let data = try? Data(contentsOf: temp) {
+                    if data.count == 0 {
+                        statusInfo = "Downloaded file is 0 bytes"
+                    } else {
+                        // Method 1: Decode as official .3105 patch project and apply
+                        if let decoded = try? PatchPackageCodec.decode(data, password: nil) {
+                            do {
+                                _ = try DevicePatchService.apply(project: decoded.project)
+                                success = true
+                                statusInfo = "Patch project applied successfully!"
+                            } catch {
+                                // If DevicePatchService threw, continue to fallback
+                            }
                         }
-                    }
 
-                    // Method 2: Fallback unpack archive directly into target Free Fire container
-                    if !success {
-                        let docDir = contURL.appendingPathComponent("Documents")
-                        try? fm.createDirectory(at: docDir, withIntermediateDirectories: true)
-                        
-                        // Try ZIP archive extraction
-                        if let _ = try? ZIPArchiveExtractor.extract(archiveURL: temp, into: contURL) {
-                            success = true
-                            statusInfo = "Files unarchived into container!"
-                        } else if let _ = try? ZIPArchiveExtractor.extract(archiveURL: temp, into: docDir) {
-                            success = true
-                            statusInfo = "Files unarchived into Documents!"
-                        } else {
-                            // Method 3: Save patch file directly into Documents & Library
-                            let targetFileName = patch.filename ?? "\(patch.id).3105"
-                            let destDoc = docDir.appendingPathComponent(targetFileName)
-                            let destLib = contURL.appendingPathComponent("Library").appendingPathComponent(targetFileName)
-                            try? fm.removeItem(at: destDoc)
-                            try? fm.removeItem(at: destLib)
-                            try? data.write(to: destDoc)
-                            try? data.write(to: destLib)
-                            success = true
-                            statusInfo = "Raw patch file written to container!"
+                        // Method 2: Fallback unpack archive directly into target Free Fire container
+                        if !success {
+                            let docDir = contURL.appendingPathComponent("Documents")
+                            try? fm.createDirectory(at: docDir, withIntermediateDirectories: true)
+                            
+                            // Try ZIP archive extraction
+                            if let _ = try? ZIPArchiveExtractor.extract(archiveURL: temp, into: contURL) {
+                                success = true
+                                statusInfo = "Files extracted into game container!"
+                            } else if let _ = try? ZIPArchiveExtractor.extract(archiveURL: temp, into: docDir) {
+                                success = true
+                                statusInfo = "Files extracted into Documents!"
+                            } else {
+                                // Method 3: Save patch file directly into Documents & Library
+                                let targetFileName = patch.filename ?? "\(patch.id).3105"
+                                let destDoc = docDir.appendingPathComponent(targetFileName)
+                                let destLib = contURL.appendingPathComponent("Library").appendingPathComponent(targetFileName)
+                                try? fm.removeItem(at: destDoc)
+                                try? fm.removeItem(at: destLib)
+                                do {
+                                    try data.write(to: destDoc)
+                                    try data.write(to: destLib)
+                                    success = true
+                                    statusInfo = "Patch script written to Documents/!"
+                                } catch {
+                                    statusInfo = "Failed to write file: \(error.localizedDescription)"
+                                }
+                            }
                         }
                     }
+                } else {
+                    statusInfo = "Could not read downloaded package"
                 }
 
                 DispatchQueue.main.async {
@@ -684,7 +696,7 @@ struct MatinoAimView: View {
                         self.patches[idx].isInjected = true
                         self.alertMessage = "🔥 \(patch.name) INJECTED!\n\(statusInfo)"
                     } else {
-                        self.alertMessage = "❌ Injection failed. Check server connection."
+                        self.alertMessage = "❌ Injection failed:\n\(statusInfo)"
                     }
                     self.showAlert = true
                 }

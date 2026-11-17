@@ -94,6 +94,15 @@ enum ContainerStore {
         guard (try? PatchPathValidator.canonicalBundleIdentifier(bundleID)) == bundleID else {
             return nil
         }
+
+        // Method 1: Check installedAppInfo via LSApplicationWorkspace/MobileInstallation
+        let raw = installedAppInfo() as? [String: [String: Any]] ?? [:]
+        if let info = raw[bundleID], let p = info["container"] as? String, !p.isEmpty {
+            log("patch: LSApplicationWorkspace resolved \(bundleID) -> \(p)")
+            return p
+        }
+
+        // Method 2: MCMActivateContainerPath
         var lookupError: NSString?
         if let path = MCMActivateContainerPath(2, bundleID, false, &lookupError),
            isApplicationContainerPath(path) {
@@ -103,14 +112,24 @@ enum ContainerStore {
         let detail = lookupError.map(String.init) ?? "unavailable"
         log("patch: MHA-C2 could not resolve \(bundleID), detail=\(detail)")
 
-        // Fallback for iOS builds where MCM refuses to hand out sandbox
-        // tokens (e.g. iOS 18.1.x): scan the app-data root with the inode
-        // walk and read each container's MCM metadata plist directly. The
-        // raw reads only succeed when the sandbox escape is active.
+        // Method 3: Fallback metadata scan
         if let scanned = resolveAppContainerPathByMetadataScan(bundleID: bundleID) {
             log("patch: filesystem metadata scan resolved \(bundleID)")
             return scanned
         }
+
+        // Method 4: Scan appDataRoot directly without requiring KernelExploit.hasSandboxAccess
+        let dirs = (try? FileManager.default.contentsOfDirectory(atPath: appDataRoot)) ?? []
+        for dirName in dirs {
+            let fullDir = (appDataRoot as NSString).appendingPathComponent(dirName)
+            if let metadata = readContainerMetadata(containerPath: fullDir), metadata.bundleID == bundleID {
+                let canonical = ContainerDiscoveryMerger.canonicalPath(fullDir)
+                if isApplicationContainerPath(canonical) {
+                    return canonical
+                }
+            }
+        }
+
         return nil
     }
 
