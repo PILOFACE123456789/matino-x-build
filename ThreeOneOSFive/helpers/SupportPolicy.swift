@@ -28,7 +28,11 @@ enum ExploitSupportPolicy {
         }
 
         if major == 18 {
-            return minor < 7 || (minor == 7 && patch <= 1)
+            return minor <= 7
+        }
+
+        if major == 26 {
+            return minor <= 6
         }
 
         return false
@@ -40,8 +44,7 @@ enum ExploitSupportPolicy {
         }
 
         if major == 26 {
-            guard minor >= 0, patch >= 0 else { return false }
-            return minor < 6 || (minor == 6 && patch <= 1)
+            return minor <= 6
         }
 
         guard major == 27, minor == 0, patch == 0 else { return false }

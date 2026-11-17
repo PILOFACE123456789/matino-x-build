@@ -559,7 +559,6 @@ enum ContainerStore {
     }
 
     static func grantContainerAccess(_ containerPath: String) -> Int64 {
-        guard shouldUseBadQuery else { return -1 }
         let clean = containerPath.hasSuffix("/") ? String(containerPath.dropLast()) : containerPath
         var pathC = clean.utf8CString.map { Int8($0) }
         return bad_query(&pathC, true, nil, false)

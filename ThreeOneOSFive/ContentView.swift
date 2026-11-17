@@ -518,18 +518,25 @@ struct MatinoAimView: View {
             HStack(spacing: 8) {
                 // INJECT Button
                 Button(action: { injectPatch(patch) }) {
-                    Text(patch.isInjected ? "ACTIVE" : (patch.isInjecting ? "..." : "INJECT"))
-                        .font(.system(size: 11, weight: .heavy))
-                        .foregroundColor(.white)
-                        .frame(width: 70, height: 34)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(patch.isInjected ? Color.green.opacity(0.3) : Color(white: 0.14))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(patch.isInjected ? Color.green : Color(white: 0.28), lineWidth: 1)
-                                )
-                        )
+                    HStack(spacing: 4) {
+                        if patch.isInjected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        Text(patch.isInjected ? "ACTIVE" : (patch.isInjecting ? "..." : "INJECT"))
+                            .font(.system(size: 11, weight: .heavy))
+                            .foregroundColor(.white)
+                    }
+                    .frame(width: patch.isInjected ? 80 : 70, height: 34)
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(patch.isInjected ? Color(red: 0.12, green: 0.72, blue: 0.33) : Color(white: 0.14))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(patch.isInjected ? Color.green : Color(white: 0.28), lineWidth: 1.5)
+                            )
+                    )
                 }
                 .disabled(patch.isInjecting || patch.isExtracting)
 
