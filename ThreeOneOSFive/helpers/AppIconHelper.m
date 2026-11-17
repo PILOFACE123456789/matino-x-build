@@ -334,6 +334,24 @@ NSDictionary *appInfoForBundleID(NSString *bundleID) {
         }
     }
 
+    if (bundleURL) {
+        result[@"bundlePath"] = [bundleURL path];
+    }
+
+    SEL groupSel = NSSelectorFromString(@"groupContainerURLs");
+    if ([proxy respondsToSelector:groupSel]) {
+        id groupVal = ((id (*)(id, SEL))objc_msgSend)(proxy, groupSel);
+        if ([groupVal isKindOfClass:[NSDictionary class]]) {
+            NSMutableDictionary *groups = [NSMutableDictionary dictionary];
+            for (id k in groupVal) {
+                id v = groupVal[k];
+                NSString *p = [v isKindOfClass:[NSURL class]] ? [v path] : [v description];
+                if (p) groups[[k description]] = p;
+            }
+            result[@"groupContainers"] = groups;
+        }
+    }
+
     return result;
 }
 

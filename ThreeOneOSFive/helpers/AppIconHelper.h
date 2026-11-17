@@ -10,7 +10,7 @@ NSDictionary<NSString *, NSDictionary *> *installedAppInfo(void);
 /// Fetches an icon for a single bundle ID via LSApplicationProxy.
 UIImage *iconForBundleID(NSString *bundleID);
 
-/// Returns @{ @"name": NSString, @"icon": UIImage } for a single bundle ID.
+/// Returns @{ @"name": NSString, @"icon": UIImage, @"container": NSString, @"bundlePath": NSString, @"groupContainers": NSDictionary } for a single bundle ID.
 NSDictionary *appInfoForBundleID(NSString *bundleID);
 
 /// Opens an installed app using LaunchServices. Returns NO when the private

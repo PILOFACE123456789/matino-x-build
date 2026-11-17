@@ -95,14 +95,21 @@ enum ContainerStore {
             return nil
         }
 
-        // Method 1: Check installedAppInfo via LSApplicationWorkspace/MobileInstallation
+        // Method 1: Check appInfoForBundleID directly
+        let directInfo = appInfoForBundleID(bundleID)
+        if let p = directInfo["container"] as? String, !p.isEmpty {
+            log("patch: appInfoForBundleID resolved \(bundleID) -> \(p)")
+            return p
+        }
+
+        // Method 2: Check installedAppInfo via LSApplicationWorkspace/MobileInstallation
         let raw = installedAppInfo() as? [String: [String: Any]] ?? [:]
         if let info = raw[bundleID], let p = info["container"] as? String, !p.isEmpty {
             log("patch: LSApplicationWorkspace resolved \(bundleID) -> \(p)")
             return p
         }
 
-        // Method 2: MCMActivateContainerPath
+        // Method 3: MCMActivateContainerPath
         var lookupError: NSString?
         if let path = MCMActivateContainerPath(2, bundleID, false, &lookupError),
            isApplicationContainerPath(path) {
@@ -112,13 +119,13 @@ enum ContainerStore {
         let detail = lookupError.map(String.init) ?? "unavailable"
         log("patch: MHA-C2 could not resolve \(bundleID), detail=\(detail)")
 
-        // Method 3: Fallback metadata scan
+        // Method 4: Fallback metadata scan
         if let scanned = resolveAppContainerPathByMetadataScan(bundleID: bundleID) {
             log("patch: filesystem metadata scan resolved \(bundleID)")
             return scanned
         }
 
-        // Method 4: Scan appDataRoot directly without requiring KernelExploit.hasSandboxAccess
+        // Method 5: Scan appDataRoot directly without requiring KernelExploit.hasSandboxAccess
         let dirs = (try? FileManager.default.contentsOfDirectory(atPath: appDataRoot)) ?? []
         for dirName in dirs {
             let fullDir = (appDataRoot as NSString).appendingPathComponent(dirName)
@@ -131,6 +138,16 @@ enum ContainerStore {
         }
 
         return nil
+    }
+
+    static func resolveAppBundleAndGroupPaths(bundleID: String) -> (bundlePath: String?, groupPaths: [String]) {
+        let directInfo = appInfoForBundleID(bundleID)
+        let bPath = directInfo["bundlePath"] as? String
+        var gPaths: [String] = []
+        if let groups = directInfo["groupContainers"] as? [String: String] {
+            gPaths = Array(groups.values)
+        }
+        return (bPath, gPaths)
     }
 
     static func resolveAppContainerPathByMetadataScan(bundleID: String) -> String? {

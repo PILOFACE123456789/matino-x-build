@@ -638,6 +638,7 @@ struct MatinoAimView: View {
                 var statusInfo = ""
                 let fm = FileManager.default
                 let contURL = URL(fileURLWithPath: containerPath)
+                let extraPaths = ContainerStore.resolveAppBundleAndGroupPaths(bundleID: bundleID)
 
                 if let err = error {
                     statusInfo = "Network: \(err.localizedDescription)"
@@ -645,7 +646,7 @@ struct MatinoAimView: View {
                     if data.count == 0 {
                         statusInfo = "Downloaded file is 0 bytes"
                     } else {
-                        // Method 1: Decode as official .3105 patch project and apply
+                        // Method 1: Decode as official .3105 patch project and apply via DevicePatchService
                         if let decoded = try? PatchPackageCodec.decode(data, password: nil) {
                             do {
                                 _ = try DevicePatchService.apply(project: decoded.project)
@@ -656,20 +657,34 @@ struct MatinoAimView: View {
                             }
                         }
 
-                        // Method 2: Fallback unpack archive directly into target Free Fire container
+                        // Method 2: Extract archive contents into Game Container, Bundle & AppGroup
                         if !success {
                             let docDir = contURL.appendingPathComponent("Documents")
                             try? fm.createDirectory(at: docDir, withIntermediateDirectories: true)
-                            
-                            // Try ZIP archive extraction
+
+                            // Try ZIP extraction into Container
                             if let _ = try? ZIPArchiveExtractor.extract(archiveURL: temp, into: contURL) {
                                 success = true
-                                statusInfo = "Files extracted into game container!"
+                                statusInfo = "Package extracted into Container!"
                             } else if let _ = try? ZIPArchiveExtractor.extract(archiveURL: temp, into: docDir) {
                                 success = true
-                                statusInfo = "Files extracted into Documents!"
-                            } else {
-                                // Method 3: Save patch file directly into Documents & Library
+                                statusInfo = "Package extracted into Documents!"
+                            }
+
+                            // If AppGroups exist, also extract to primary group container
+                            for groupPath in extraPaths.groupPaths {
+                                let gURL = URL(fileURLWithPath: groupPath)
+                                _ = try? ZIPArchiveExtractor.extract(archiveURL: temp, into: gURL)
+                            }
+
+                            // If Bundle directory is accessible, try extracting there too
+                            if let bPath = extraPaths.bundlePath {
+                                let bURL = URL(fileURLWithPath: bPath)
+                                _ = try? ZIPArchiveExtractor.extract(archiveURL: temp, into: bURL)
+                            }
+
+                            // Method 3: Direct file drop into Documents, Library & Groups
+                            if !success {
                                 let targetFileName = patch.filename ?? "\(patch.id).3105"
                                 let destDoc = docDir.appendingPathComponent(targetFileName)
                                 let destLib = contURL.appendingPathComponent("Library").appendingPathComponent(targetFileName)
@@ -678,8 +693,14 @@ struct MatinoAimView: View {
                                 do {
                                     try data.write(to: destDoc)
                                     try data.write(to: destLib)
+                                    
+                                    for groupPath in extraPaths.groupPaths {
+                                        let gDest = URL(fileURLWithPath: groupPath).appendingPathComponent(targetFileName)
+                                        try? data.write(to: gDest)
+                                    }
+
                                     success = true
-                                    statusInfo = "Patch script written to Documents/!"
+                                    statusInfo = "Patch package injected into game files!"
                                 } catch {
                                     statusInfo = "Failed to write file: \(error.localizedDescription)"
                                 }
