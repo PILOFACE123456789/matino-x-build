@@ -226,11 +226,34 @@ struct RemotePatchItem: Identifiable, Codable {
     var category: String
     var status_text: String
     var filename: String?
-    var isInjecting: Bool? = false
-    var isInjected: Bool? = false
+    var isInjecting: Bool = false
+    var isInjected: Bool = false
 
     enum CodingKeys: String, CodingKey {
         case id, name, game, category, status_text, filename
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try container.decode(String.self, forKey: .id)
+        self.name = try container.decode(String.self, forKey: .name)
+        self.game = (try? container.decode(String.self, forKey: .game)) ?? "normal"
+        self.category = (try? container.decode(String.self, forKey: .category)) ?? "aim"
+        self.status_text = (try? container.decode(String.self, forKey: .status_text)) ?? "SAFE"
+        self.filename = try? container.decode(String.self, forKey: .filename)
+        self.isInjecting = false
+        self.isInjected = false
+    }
+
+    init(id: String, name: String, game: String, category: String, status_text: String, filename: String? = nil) {
+        self.id = id
+        self.name = name
+        self.game = game
+        self.category = category
+        self.status_text = status_text
+        self.filename = filename
+        self.isInjecting = false
+        self.isInjected = false
     }
 }
 
