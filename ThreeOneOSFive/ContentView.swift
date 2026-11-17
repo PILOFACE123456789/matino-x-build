@@ -233,16 +233,7 @@ struct RemotePatchItem: Identifiable, Codable {
 struct MatinoAimView: View {
     @State private var selectedGame: String = "normal" // "normal" or "max"
     @State private var selectedTab: Int = 0 // 0: AIM, 1: HOLOGRAM, 2: SKIN MOD, 3: COMPATIBILITY, 4: MORE
-    @State private var patches: [RemotePatchItem] = [
-        RemotePatchItem(id: "DRAGTHFF-NORMAL", name: "AIM DRAG", game: "normal", category: "aim", status_text: "SAFE", filename: "AIM_DRAG.3105"),
-        RemotePatchItem(id: "DRAGKTHFF-NORMAL", name: "AIM HEAD", game: "normal", category: "aim", status_text: "SAFE", filename: "AIM_HEAD.3105"),
-        RemotePatchItem(id: "BODYTHFF-NORMAL", name: "AIM BODY", game: "normal", category: "aim", status_text: "SAFE", filename: "AIM_BODY.3105"),
-        RemotePatchItem(id: "MAGICHFF-NORMAL", name: "AIM MAGIC", game: "normal", category: "aim", status_text: "SAFE", filename: "AIM_MAGIC.3105"),
-        RemotePatchItem(id: "DRAGTHFFANTENA-NORMAL", name: "AIM DRAG ANTENA", game: "normal", category: "aim", status_text: "SAFE", filename: "AIM_DRAG_ANTENA.3105"),
-        RemotePatchItem(id: "AIM_HEAD_ANTENA", name: "AIM HEAD ANTENA", game: "normal", category: "aim", status_text: "SAFE", filename: "AIM_HEAD_ANTENA.3105"),
-        RemotePatchItem(id: "Hologramxe-normal", name: "CHARACTER RED", game: "normal", category: "body", status_text: "FULL SAFE", filename: "CHAR_RED.3105"),
-        RemotePatchItem(id: "Hologramxre-normal", name: "CHARACTER BLUE", game: "normal", category: "body", status_text: "FULL SAFE", filename: "CHAR_BLUE.3105")
-    ]
+    @State private var patches: [RemotePatchItem] = []
     @State private var alertMessage: String?
     @State private var showAlert: Bool = false
 
