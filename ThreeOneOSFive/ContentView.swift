@@ -354,13 +354,22 @@ struct MatinoAimView: View {
     private var officialInfoCard: some View {
         HStack {
             HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(white: 0.15))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "flame.fill")
-                        .foregroundColor(.white)
-                        .font(.system(size: 22))
+                if let uiImage = UIImage(named: "MatinoLogo") ?? UIImage(contentsOfFile: Bundle.main.path(forResource: "matino_logo", ofType: "jpg") ?? "") {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 48, height: 48)
+                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.3), lineWidth: 1))
+                } else {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color(white: 0.15))
+                            .frame(width: 48, height: 48)
+                        Image(systemName: "flame.fill")
+                            .foregroundColor(.white)
+                            .font(.system(size: 22))
+                    }
                 }
                 VStack(alignment: .leading, spacing: 3) {
                     Text("MATINO X")
@@ -609,7 +618,6 @@ struct MatinoAimView: View {
         guard let idx = patches.firstIndex(where: { $0.id == patch.id }) else { return }
         patches[idx].isInjecting = true
 
-        // Look for target bundle
         let bundleID = patch.game == "max" ? "com.dts.freefiremax" : "com.dts.freefireth"
         guard let containerPath = ContainerStore.resolveAppContainerPath(bundleID: bundleID) else {
             patches[idx].isInjecting = false
@@ -618,27 +626,70 @@ struct MatinoAimView: View {
             return
         }
 
-        // Try downloading patch from server if exists
         let downloadURL = "\(serverURL)/api/patches/\(patch.id)/download?tenant=vesper"
-        if let url = URL(string: downloadURL) {
-            URLSession.shared.downloadTask(with: url) { tempURL, _, error in
+        guard let url = URL(string: downloadURL) else {
+            patches[idx].isInjecting = false
+            return
+        }
+
+        URLSession.shared.downloadTask(with: url) { tempURL, _, error in
+            DispatchQueue.global(qos: .userInitiated).async {
+                var success = false
+                var statusInfo = ""
+                let fm = FileManager.default
+                let contURL = URL(fileURLWithPath: containerPath)
+
+                if let temp = tempURL, let data = try? Data(contentsOf: temp) {
+                    // Method 1: Decode as official .3105 patch project and apply
+                    if let decoded = try? PatchPackageCodec.decode(data, password: nil) {
+                        do {
+                            _ = try DevicePatchService.apply(project: decoded.project)
+                            success = true
+                            statusInfo = "Patch project applied!"
+                        } catch {
+                            // If DevicePatchService threw, continue to fallback extraction
+                        }
+                    }
+
+                    // Method 2: Fallback unpack archive directly into target Free Fire container
+                    if !success {
+                        let docDir = contURL.appendingPathComponent("Documents")
+                        try? fm.createDirectory(at: docDir, withIntermediateDirectories: true)
+                        
+                        // Try ZIP archive extraction
+                        if let _ = try? ZIPArchiveExtractor.extract(archiveURL: temp, into: contURL) {
+                            success = true
+                            statusInfo = "Files unarchived into container!"
+                        } else if let _ = try? ZIPArchiveExtractor.extract(archiveURL: temp, into: docDir) {
+                            success = true
+                            statusInfo = "Files unarchived into Documents!"
+                        } else {
+                            // Method 3: Save patch file directly into Documents & Library
+                            let targetFileName = patch.filename ?? "\(patch.id).3105"
+                            let destDoc = docDir.appendingPathComponent(targetFileName)
+                            let destLib = contURL.appendingPathComponent("Library").appendingPathComponent(targetFileName)
+                            try? fm.removeItem(at: destDoc)
+                            try? fm.removeItem(at: destLib)
+                            try? data.write(to: destDoc)
+                            try? data.write(to: destLib)
+                            success = true
+                            statusInfo = "Raw patch file written to container!"
+                        }
+                    }
+                }
+
                 DispatchQueue.main.async {
                     self.patches[idx].isInjecting = false
-                    if let temp = tempURL {
-                        // Apply package
-                        if let data = try? Data(contentsOf: temp), let decoded = try? PatchPackageCodec.decode(data, password: nil) { _ = try? DevicePatchService.apply(project: decoded.project) }
+                    if success {
+                        self.patches[idx].isInjected = true
+                        self.alertMessage = "🔥 \(patch.name) INJECTED!\n\(statusInfo)"
+                    } else {
+                        self.alertMessage = "❌ Injection failed. Check server connection."
                     }
-                    self.patches[idx].isInjected = true
-                    self.alertMessage = "\(patch.name) injected successfully into Free Fire!"
                     self.showAlert = true
                 }
-            }.resume()
-        } else {
-            patches[idx].isInjecting = false
-            patches[idx].isInjected = true
-            alertMessage = "\(patch.name) injected successfully!"
-            showAlert = true
-        }
+            }
+        }.resume()
     }
 
     private func extractPatch(_ patch: RemotePatchItem) {
